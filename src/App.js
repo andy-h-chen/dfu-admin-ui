@@ -1,5 +1,9 @@
 import React, { Component } from 'react';
+import decode from 'jwt-decode';
 import ReactDom from 'react-dom';
+import { Button, FormGroup, FormControl, ControlLabel, Nav, Navbar, NavItem, Glyphicon } from "react-bootstrap";
+import { BrowserRouter as Router, Route, Switch, Link } from "react-router-dom";
+import { LinkContainer } from "react-router-bootstrap";
 import './App.css';
 
 // Import React Table
@@ -11,12 +15,49 @@ import Popup from "react-popup";
 import Select from 'react-select';
 import 'react-select/dist/react-select.css';
 
+const ID_TOKEN_KEY = 'id_token';
+
+export function getIdToken() {
+  return localStorage.getItem(ID_TOKEN_KEY);
+}
+function clearIdToken() {
+  localStorage.removeItem(ID_TOKEN_KEY);
+}
+export function logout(callback) {
+  clearIdToken();
+  if (callback)
+    callback();
+}
+// Get and store id_token in local storage
+export function setIdToken(idToken) {
+  localStorage.setItem(ID_TOKEN_KEY, idToken);
+}
+
+export function isLoggedIn() {
+  const idToken = getIdToken();
+  return !!idToken && !isTokenExpired(idToken);
+}
+function isTokenExpired(token) {
+  const expirationDate = getTokenExpirationDate(token);
+  return expirationDate < new Date();
+}
+function getTokenExpirationDate(encodedToken) {
+  const token = decode(encodedToken);
+  if (!token.exp) { return null; }
+
+  const date = new Date(0);
+  date.setUTCSeconds(token.exp);
+  return date;
+}
+
 ReactDom.render(
     <Popup />,
     document.getElementById('popupContainer')
 );
 
 var domainName = "https://wip.remocare.net";
+
+
 
 /** The prompt content component */
 class PromptSelect extends React.Component {
@@ -163,7 +204,7 @@ class UserList extends Component {
         {
           let self = this;
           let agent_id = row.value;
-          let btn = <button onClick={() => { Popup.plugins().prompt_input(agent_id, '', function(value) { self.modifyAgentId(value, row.index); })}}>E</button>;
+          let btn = <Button bsSize='xs' bsStyle='default' onClick={() => { Popup.plugins().prompt_input(agent_id, '', function(value) { self.modifyAgentId(value, row.index); })}}><Glyphicon glyph="pencil" /></Button>;
           return <div>{agent_id}<br />{btn}</div>;
         }
       }]
@@ -223,7 +264,7 @@ class DfuList extends Component {
         Cell: row => {
             let statusOptions = [{value: 0, label: 'Trial'}, {value: 1, label: 'Regular'}, {value:2, label:'VIP'}];
             let self = this;
-            let btn = <button onClick={() => { Popup.plugins().prompt_select(statusOptions, row.value, '', function(value) { self.handleUserStatusChange(value, row.index); })}}>E</button>;
+            let btn = <Button bsSize='xsmall' bsStyle='default' onClick={() => { Popup.plugins().prompt_select(statusOptions, row.value, '', function(value) { self.handleUserStatusChange(value, row.index); })}}><Glyphicon glyph="pencil" /></Button>;
             let status = row.value === 0 ? 'Trial' : (row.value === 1 ? 'Regular' : 'VIP');
             return <div>{status}<br />{btn}</div>;
         }
@@ -241,7 +282,7 @@ class DfuList extends Component {
         {
           let self = this;
           let agent_id = row.value ? row.value.agentId : '';
-          let btn = <button onClick={() => { Popup.plugins().prompt_select(agents, null, '', function(value) { self.modifyAgentId(value, row.index); })}}>E</button>;
+          let btn = <Button bsSize='xsmall' bsStyle='default' onClick={() => { Popup.plugins().prompt_select(agents, null, '', function(value) { self.modifyAgentId(value, row.index); })}}><Glyphicon glyph="pencil" /></Button>;
           return <div>{agent_id}<br />{btn}</div>;
         }
       }, {
@@ -256,7 +297,7 @@ class DfuList extends Component {
           for(var i=0; i<row.value.length; i++) {
             content.push(<div><input type='checkbox' name='userid' value={row.value[i]._id} defaultChecked onChange={(e) => { console.log(e.target.name, e.target.value); self.modifyAssociatedEmail(e.target.value, row.index, false); }} />{row.value[i].email}</div>);
           }
-          return <div>{content}<button onClick={() => { Popup.plugins().prompt_select(self.state.users, null, '', function(value) { self.modifyAssociatedEmail(value, row.index, true); })}}>+</button></div>;
+          return <div>{content}<Button bsSize='xsmall' bsStyle='default' onClick={() => { Popup.plugins().prompt_select(self.state.users, null, '', function(value) { self.modifyAssociatedEmail(value, row.index, true); })}}><Glyphicon glyph="plus" /></Button></div>;
         }
       }, {
         Header: 'Take Action',
@@ -266,7 +307,7 @@ class DfuList extends Component {
           <div><form>
             <input type="radio" name="action" value="enabled" checked={row.value } onChange={ () => {this.onEnableRow(row.index, row.value, true) }} />Enable<br />
             <input type="radio" name="action" value="disable"  checked={!row.value} onChange={ () => {this.onEnableRow(row.index, row.value, false) }} />Disable<br /></form>
-            <button onClick={() => { if (window.confirm('Are you sure you wish to delete this item?')) this.onDeleteRow(row.index) }}>X</button>
+            <Button bsSize='xsmall' bsStyle='default' onClick={() => { if (window.confirm('Are you sure you wish to delete this item?')) this.onDeleteRow(row.index) }}><Glyphicon glyph="remove" /></Button>
           </div>
         )
       }]
@@ -387,6 +428,26 @@ class DfuList extends Component {
     var theRow = d[index];
     d[index].status = userStatus;
     this.setState({data: d});
+
+    var headers = new Headers();
+    headers.append('Content-Type', 'application/json');
+    var url = domainName + '/api/v1/dfus/' + theRow._id + '/status';
+    var body = JSON.stringify({
+        _id: theRow._id,
+        status: theRow.status
+    });
+    var init = {
+        method: 'PATCH',
+        headers: headers,
+        body: body
+    };
+    var request = new Request(url, init);
+    fetch(request)
+      .then(response => response.json())
+      .then(data => {
+        console.log(data);
+      })
+      .catch(error => console.error(error));
   }
   modifyAgentId = (userId, index) => {
     var agents = this.state.agents,
@@ -425,6 +486,63 @@ class DfuList extends Component {
   }
 }
 
+class Login extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      email: '',
+      password: ''
+    };
+  }
+  validateForm() {
+    return this.state.email.length > 0 && this.state.password.length > 0;
+  }
+
+  handleChange = event => {
+    this.setState({
+      [event.target.id]: event.target.value
+    });
+  }
+
+  handleSubmit = event => {
+    event.preventDefault();
+    this.props.submitHandler({email: event.target.email.value, password: event.target.password.value});
+  }
+  render() {
+    return (
+      <div className="Login">
+        <form onSubmit={this.handleSubmit}>
+          <FormGroup controlId="email" bsSize="large">
+            <ControlLabel>Email</ControlLabel>
+            <FormControl
+              autoFocus
+              type="text"
+              value={this.state.email}
+              onChange={this.handleChange}
+            />
+          </FormGroup>
+          <FormGroup controlId="password" bsSize="large">
+            <ControlLabel>Password</ControlLabel>
+            <FormControl
+              value={this.state.password}
+              onChange={this.handleChange}
+              type="password"
+            />
+          </FormGroup>
+          <Button
+            block
+            bsSize="large"
+            disabled={!this.validateForm()}
+            type="submit"
+          >
+            Login
+          </Button>
+        </form>
+      </div>
+    );
+  }
+}
+
 class App extends React.Component {
   constructor(props) {
     super(props);
@@ -435,12 +553,20 @@ class App extends React.Component {
       options: [],
       users: [],
       agents: [],
+      isLoggedIn: isLoggedIn(),
+      showLogin: true,
       showUsers: false,
       showDfus: false,
+      errMsg: null,
     };
   }
   componentDidMount() {
-    this.getData();
+    if (this.state.isLoggedIn) {
+      if (!this.state.currentUser) {
+        var decodedToken = decode(getIdToken());
+        this.getDataForUser({_id: decodedToken._id, agentId: decodedToken.agentId});
+      }
+    }
   }
   modifyAgentIdForUser(agentId, index) {
     console.log(agentId, index);
@@ -468,29 +594,6 @@ class App extends React.Component {
         console.log(data);
       })
       .catch(error => console.error(error));
-  }
-  render() {
-    return (
-      <div>
-        <div class='user-dropdown-div'>
-          <div>Please select the login user name</div>
-        <Select
-          name="form-field-name"
-          value=''
-          onChange={this.getDataForUser.bind(this)}
-          options = {this.state.allUsers}
-        />
-        </div>
-        {this.state.showDfus ?
-           <DfuList data={this.state.dfus} agents={this.state.agents} users={this.state.allUsers} /> : null
-        }
-        {this.state.showUsers ?
-           <UserList users={this.state.users} agentIDHandler={this.modifyAgentIdForUser} app={this} />
-           :
-           null
-        }
-      </div>
-    );
   }
   getDataForUser(value) {
     this.setState({showUsers: false, showDfus: false});
@@ -533,15 +636,6 @@ class App extends React.Component {
       .catch(error => console.error(error));
   }
   getData = () => {
-    /*
-    const url = domainName + '/api/v1/dfus';
-    fetch(url)
-      .then(response => response.json())
-      .then(data => {
-        this.setState({dfus: data});
-      })
-      .catch(error => console.error(error));
-      */
     const url_users = domainName + '/api/v1/users';
     fetch(url_users)
       .then(response => response.json())
@@ -553,6 +647,86 @@ class App extends React.Component {
         this.setState({allUsers: data});
       })
       .catch(error => console.error(error));
+  }
+  loginHandler(data) {
+    console.log(data);
+    var headers = new Headers();
+    headers.append('Content-Type', 'application/json');
+    headers.append('Accept', 'application/json');
+    var url = domainName + '/api/v1/auth/login';
+    var body = JSON.stringify({
+        username: data.email,
+        password: data.password,
+        target: 'admin'
+    });
+    var init = {
+        method: 'POST',
+        headers: headers,
+        body: body
+    };
+    var request = new Request(url, init);
+    fetch(request)
+      .then(response => response.json())
+      .then(data => {
+        if (data.auth && data.token) {
+          setIdToken(data.token);
+        }
+        this.setState({
+          isLoggedIn: isLoggedIn(),
+          errMsg: null
+        });
+        var decodedToken = decode(data.token);
+        this.getDataForUser({_id: decodedToken._id, agentId: decodedToken.agentId});
+      })
+      .catch(error => {
+        this.setState({errMsg: error.message});
+      });
+  }
+  handleLogout() {
+    var that = this;
+    logout(function() {
+      that.setState({
+        isLoggedIn: isLoggedIn(),
+        showDfus: false,
+        showUsers: false
+      });
+    });
+  }
+  render() {
+    return (
+    <div>
+
+      <div>
+      {this.state.isLoggedIn ?
+        <div class="Login">
+            <Button
+              block
+              bsStyle="success"
+              bsSize="large"
+              type="button"
+              onClick={this.handleLogout.bind(this)}
+            >
+              Logout
+            </Button>
+              {this.state.currentUser ? this.state.currentUser._id : null}
+        </div>
+        : 
+        <div>
+        <Login submitHandler={this.loginHandler.bind(this)} />
+        <div id='errMsg'>{this.state.errMsg}</div>
+        </div>
+      }
+        {this.state.showDfus ?
+           <DfuList data={this.state.dfus} agents={this.state.agents} users={this.state.allUsers} /> : null
+        }
+        {this.state.showUsers ?
+           <UserList users={this.state.users} agentIDHandler={this.modifyAgentIdForUser} app={this} />
+           :
+           null
+        }
+      </div>
+      </div>
+    );
   }
 }
 
