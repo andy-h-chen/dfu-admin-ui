@@ -1,9 +1,9 @@
 import React, { Component } from 'react';
 import decode from 'jwt-decode';
 import ReactDom from 'react-dom';
-import { Button, FormGroup, FormControl, ControlLabel, Nav, Navbar, NavItem, Glyphicon } from "react-bootstrap";
-import { BrowserRouter as Router, Route, Switch, Link } from "react-router-dom";
-import { LinkContainer } from "react-router-bootstrap";
+import { Button, FormGroup, FormControl, ControlLabel, Nav, Navbar, NavItem, Glyphicon, Modal } from "react-bootstrap";
+//import { BrowserRouter as Router, Route, Switch, Link } from "react-router-dom";
+//import { LinkContainer } from "react-router-bootstrap";
 import './App.css';
 
 // Import React Table
@@ -88,12 +88,16 @@ class PromptSelect extends React.Component {
         const { selectedOption } = this.state;
         const { availableOptions } = this.state;
         return (
+          <div>
           <Select
             name="form-field-name"
             value={selectedOption}
             onChange={this.handleChange}
             options = {availableOptions}
-          />);
+          />
+          <br /><br /><br /><br /><br />
+          </div>
+        );
     }
 }
 
@@ -224,18 +228,23 @@ class DfuList extends Component {
     super(props);
     this.state = {
       data: this.props.data,
-      users: this.props.users,
-      agents: this.props.agents,
+      showModal: false,
+      modalSelectOptions: [],
+      modalSelectHandler: null,
     }
   }
   componentDidMount() {
     //this.getData();
   }
-  
+  onModalClose() {
+    this.setState({showModal: false});
+  }
+  onModalSave(selected) {
+    console.log(selected);
+    this.onModalClose();
+  }
   render() {
     const { data } = this.state;
-    const { users } = this.state;
-    const { agents } = this.state;
     return (
       <div>
         <ReactTable
@@ -282,7 +291,15 @@ class DfuList extends Component {
         {
           let self = this;
           let agent_id = row.value ? row.value.agentId : '';
-          let btn = <Button bsSize='xsmall' bsStyle='default' onClick={() => { Popup.plugins().prompt_select(agents, null, '', function(value) { self.modifyAgentId(value, row.index); })}}><Glyphicon glyph="pencil" /></Button>;
+          //let btn = <Button bsSize='xsmall' bsStyle='default' onClick={() => { Popup.plugins().prompt_select(self.props.agents, null, '', function(value) { self.modifyAgentId(value, row.index); })}}><Glyphicon glyph="pencil" /></Button>;
+          let btnHandler = function() {
+            self.setState({
+              showModal: true,
+              modalSelectOptions: self.props.agents,
+              modalSelectHandler: function(value) { self.modifyAgentId(value, row.index); self.onModalClose()}
+            });
+          };
+          let btn = <Button bsSize='xsmall' bsStyle='default' onClick={btnHandler}><Glyphicon glyph="pencil" /></Button>;
           return <div>{agent_id}<br />{btn}</div>;
         }
       }, {
@@ -297,7 +314,18 @@ class DfuList extends Component {
           for(var i=0; i<row.value.length; i++) {
             content.push(<div><input type='checkbox' name='userid' value={row.value[i]._id} defaultChecked onChange={(e) => { console.log(e.target.name, e.target.value); self.modifyAssociatedEmail(e.target.value, row.index, false); }} />{row.value[i].email}</div>);
           }
-          return <div>{content}<Button bsSize='xsmall' bsStyle='default' onClick={() => { Popup.plugins().prompt_select(self.state.users, null, '', function(value) { self.modifyAssociatedEmail(value, row.index, true); })}}><Glyphicon glyph="plus" /></Button></div>;
+          /*
+          let btn1 = <Button bsSize='xsmall' bsStyle='default' onClick={() => { Popup.plugins().prompt_select(self.props.users, null, '', function(value) { self.modifyAssociatedEmail(value, row.index, true); })}}><Glyphicon glyph="plus" /></Button>;
+          */
+          let btnHandler = function() {
+            self.setState({
+              showModal: true,
+              modalSelectOptions: self.props.users,
+              modalSelectHandler: function(value) { self.modifyAssociatedEmail(value, row.index, true); self.onModalClose()}
+            });
+          };
+          let btn = <Button bsSize='xsmall' bsStyle='default' onClick={btnHandler}><Glyphicon glyph="plus" /></Button>;
+          return <div>{content}{btn}</div>;
         }
       }, {
         Header: 'Take Action',
@@ -314,22 +342,10 @@ class DfuList extends Component {
     }]}
           defaultPageSize={10}
           className="-striped -highlight"
-        />
-        <br />
-        { /*
-        <button
-          className="submit-button"
-          onClick={this.getData}
-        >
-          Get Data
-        </button>
-        <button className="submit-button" onClick={this.modifyData}>
-          Modify Data
-        </button>
-        */
-        }
-        
-        
+        />   
+        {this.state.showModal ?
+        <MyModal show={this.state.showModal} onHide={this.onModalClose.bind(this)} onSave={this.state.modalSelectHandler} options={this.state.modalSelectOptions} />
+        : null}        
       </div>
     );
   }
@@ -358,6 +374,7 @@ class DfuList extends Component {
     
     var headers = new Headers();
     headers.append('Content-Type', 'application/json');
+    headers.append('x-access-token', getIdToken());
     var url = domainName + '/api/v1/dfus/' + theRow._id + '/enabled';
     var body = JSON.stringify({
         _id: theRow._id,
@@ -378,7 +395,7 @@ class DfuList extends Component {
   }
 
   modifyAssociatedEmail = (userId, index, isAdd) => {
-    var users = this.state.users,
+    var users = this.props.users,
         theUser = null;
     for(var i=0; i<users.length; i++) {
       if (users[i].value === userId) {
@@ -388,7 +405,7 @@ class DfuList extends Component {
     }
     if (!theUser) return;
 
-    var d = this.state.data;
+    var d = this.props.data;
     var theRow = d[index];
     if (isAdd) {
       d[index].users_id.push(theUser);
@@ -404,6 +421,7 @@ class DfuList extends Component {
     // Save to db
     var headers = new Headers();
     headers.append('Content-Type', 'application/json');
+    headers.append('x-access-token', getIdToken());
     var url = domainName + '/api/v1/dfus/' + theRow._id + '/users_id';
     var body = JSON.stringify({
         _id: theRow._id,
@@ -431,6 +449,7 @@ class DfuList extends Component {
 
     var headers = new Headers();
     headers.append('Content-Type', 'application/json');
+    headers.append('x-access-token', getIdToken());
     var url = domainName + '/api/v1/dfus/' + theRow._id + '/status';
     var body = JSON.stringify({
         _id: theRow._id,
@@ -450,7 +469,7 @@ class DfuList extends Component {
       .catch(error => console.error(error));
   }
   modifyAgentId = (userId, index) => {
-    var agents = this.state.agents,
+    var agents = this.props.agents,
         theUser = null;
     for(var i=0; i<agents.length; i++) {
       if (agents[i].value === userId) {
@@ -466,6 +485,7 @@ class DfuList extends Component {
 
     var headers = new Headers();
     headers.append('Content-Type', 'application/json');
+    headers.append('x-access-token', getIdToken());
     var url = domainName + '/api/v1/dfus/' + theRow._id + '/admin_id';
     var body = JSON.stringify({
         _id: theRow._id,
@@ -543,6 +563,56 @@ class Login extends Component {
   }
 }
 
+class MyModal extends React.Component {
+  constructor(props) {
+      super(props);
+      this.state = {
+          selectedOption: this.props.selectedOption,
+          availableOptions: this.props.options,
+          value: '',
+      };
+  }
+  handleChange = (selectedOption) => {
+    this.setState({ selectedOption });
+        // selectedOption can be null when the `x` (close) button is clicked
+        if (selectedOption) {
+          console.log(`Selected: ${selectedOption.value}`);
+          this.setState({value: selectedOption.value});
+        }
+  }
+  handleSave = () => {
+    this.props.onSave(this.state.value);
+  }
+  render() {
+    return (
+      <div>
+        <Modal
+          {...this.props}
+          bsSize="small"
+          aria-labelledby="contained-modal-title-sm">
+          <Modal.Header closeButton>
+            <Modal.Title>Modal heading</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+
+            <Select
+            name="form-field-name"
+            value={this.state.selectedOption}
+            onChange={this.handleChange}
+            options = {this.state.availableOptions}
+          />
+          <br /><br />
+          </Modal.Body>
+          <Modal.Footer>
+            <Button onClick={this.props.onHide}>Cancel</Button>
+            <Button onClick={this.handleSave}>Save</Button>
+          </Modal.Footer>
+        </Modal>
+      </div>
+    );
+  }
+}
+
 class App extends React.Component {
   constructor(props) {
     super(props);
@@ -557,14 +627,14 @@ class App extends React.Component {
       showLogin: true,
       showUsers: false,
       showDfus: false,
-      errMsg: null,
+      errMsg: null
     };
   }
   componentDidMount() {
     if (this.state.isLoggedIn) {
       if (!this.state.currentUser) {
         var decodedToken = decode(getIdToken());
-        this.getDataForUser({_id: decodedToken._id, agentId: decodedToken.agentId});
+        this.getDataForUser(decodedToken);
       }
     }
   }
@@ -577,6 +647,7 @@ class App extends React.Component {
     var theRow = users[index];
     var headers = new Headers();
     headers.append('Content-Type', 'application/json');
+    headers.append('x-access-token', getIdToken());
     var url = domainName + '/api/v1/users/' + theRow._id + '/agentid';
     var body = JSON.stringify({
         _id: theRow._id,
@@ -601,6 +672,7 @@ class App extends React.Component {
         this.setState({currentUser: value});
         this.getAllSubAgentDfu(value.agentId);
         this.getAllSubAgentUser(value.agentId);
+        this.getAllUsers();
     }
     console.log(value);
   }
@@ -615,20 +687,38 @@ class App extends React.Component {
     const url = domainName + '/api/v1/users/allsubagent';
     var that = this;
     this.getData1(url, agentId, function(data) {
-        that.setState({users: data, showUsers: true});
+      that.setState({users: data, showUsers: true});
     });
   }
-  getData1(url, agentId, callback) {
+  getAllUsers() {
+    const url = domainName + '/api/v1/users';
+    var that = this;
+    this.getData1(url, 0, function(data) {
+      var agents = [];
+      for (var i=0; i<data.length; i++) {
+        data[i].value = data[i]._id;
+        data[i].label = data[i].email;
+        agents.push({value: data[i]._id, label: data[i].agentId + ' - ' + data[i].email});
+      }
+      that.setState({allUsers: data, agents: agents});
+    }, 'GET');
+  }
+  getData1(url, agentId, callback, method) {
     var body = JSON.stringify({
         user: {agentId: agentId}
     });
     var headers = new Headers();
     headers.append('Content-Type', 'application/json');
+    headers.append('x-access-token', getIdToken());
     var init = {
         method: 'POST',
         headers: headers,
         body: body
     };
+    if (method === 'GET') {
+      init.body = undefined;
+      init.method = 'GET';
+    }
     var request = new Request(url, init);
     fetch(request)
       .then(response => response.json())
@@ -676,7 +766,7 @@ class App extends React.Component {
           errMsg: null
         });
         var decodedToken = decode(data.token);
-        this.getDataForUser({_id: decodedToken._id, agentId: decodedToken.agentId});
+        this.getDataForUser(decodedToken);
       })
       .catch(error => {
         this.setState({errMsg: error.message});
@@ -695,27 +785,46 @@ class App extends React.Component {
   render() {
     return (
     <div>
+      <Navbar>
+        <Navbar.Header>
+          <Navbar.Brand>
+            <a href="#home">DFU Management</a>
+          </Navbar.Brand>
+        </Navbar.Header>
 
-      <div>
-      {this.state.isLoggedIn ?
-        <div class="Login">
-            <Button
-              block
-              bsStyle="success"
-              bsSize="large"
-              type="button"
-              onClick={this.handleLogout.bind(this)}
-            >
-              Logout
+        {!this.state.isLoggedIn ?
+        <Nav pullRight>
+          <NavItem>Login</NavItem>
+        </Nav>
+          : 
+        <Nav pullRight>
+          <NavItem>
+            <Button bsStyle="link">
+              {this.state.currentUser ? this.state.currentUser.email : null}
             </Button>
-              {this.state.currentUser ? this.state.currentUser._id : null}
-        </div>
-        : 
-        <div>
+          </NavItem>
+          <NavItem>
+              <Button
+                block
+                bsStyle="link"
+                onClick={this.handleLogout.bind(this)}
+              >
+                Logout
+              </Button>
+          </NavItem>
+        </Nav>
+        }
+      </Navbar>
+      { !this.state.isLoggedIn ?
+        <div className="Login">
         <Login submitHandler={this.loginHandler.bind(this)} />
         <div id='errMsg'>{this.state.errMsg}</div>
+              
         </div>
+        :
+        null
       }
+      <div>
         {this.state.showDfus ?
            <DfuList data={this.state.dfus} agents={this.state.agents} users={this.state.allUsers} /> : null
         }
@@ -725,7 +834,7 @@ class App extends React.Component {
            null
         }
       </div>
-      </div>
+    </div>
     );
   }
 }
