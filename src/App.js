@@ -356,7 +356,13 @@ class DfuList extends Component {
     this.setState({data: d});
 
     var url = domainName + '/api/v1/dfus/' + deleted[0]._id;
-    var init = {method: 'DELETE'};
+    var headers = new Headers();
+    headers.append('Content-Type', 'application/json');
+    headers.append('x-access-token', getIdToken());
+    var init = {
+      method: 'DELETE',
+      headers: headers
+    };
     var request = new Request(url, init);
     fetch(request)
       .then(response => response.json())
