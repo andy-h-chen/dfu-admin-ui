@@ -704,7 +704,8 @@ class App extends React.Component {
       for (var i=0; i<data.length; i++) {
         data[i].value = data[i]._id;
         data[i].label = data[i].email;
-        agents.push({value: data[i]._id, label: data[i].agentId + ' - ' + data[i].email});
+        if (data[i].agentId)
+          agents.push({value: data[i]._id, label: data[i].agentId + ' - ' + data[i].email});
       }
       that.setState({allUsers: data, agents: agents});
     }, 'GET');
