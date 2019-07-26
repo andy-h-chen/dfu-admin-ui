@@ -13,7 +13,7 @@ import "react-table/react-table.css";
 import Popup from "react-popup";
 
 import Select from 'react-select';
-import 'react-select/dist/react-select.css';
+//import 'react-select/dist/react-select.css';
 
 const ID_TOKEN_KEY = 'id_token';
 
